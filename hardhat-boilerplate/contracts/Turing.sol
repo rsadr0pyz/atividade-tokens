@@ -14,12 +14,14 @@ contract Turing is ERC20{
     mapping(string => address) public addrOf;
     mapping(address => string) public codinomeOf;
 
-    string[] private codinomes;
-
     mapping(address => mapping(string => bool)) public votes;
     mapping(address => uint256) voteCount;
 
     bool public voting = true;
+
+    // Emitido sempre que um codinome e cadastrado/atualizado.
+    // O frontend le esses eventos para montar a lista de usuarios.
+    event UserSet(string codinome, address indexed addr);
 
     constructor() ERC20("Turing", "TUR") {
         owner = msg.sender;
@@ -52,9 +54,10 @@ contract Turing is ERC20{
         validCodinome(codinome)
     {
         require(addr != address(0), "Endereco invalido.");
+        delete codinomeOf[addrOf[codinome]];
         codinomeOf[addr] = codinome;
         addrOf[codinome] = addr;
-        codinomes.push(codinome);
+        emit UserSet(codinome, addr);
     }
 
     function updateUser(string memory codinome, address user_addr) public 
@@ -101,29 +104,6 @@ contract Turing is ERC20{
         votes[msg.sender][codinome] = true;
         voteCount[msg.sender]++;
         if(voteCount[msg.sender] % 10 == 0) _mint(msg.sender, 1 * 10 ** decimals());
-    }
-
-    function getAlunos() public view
-        returns (string[] memory nomes, address[] memory enderecos, uint256[] memory saldos)
-    {
-        uint256 n = 0;
-        for (uint256 i = 0; i < codinomes.length; i++) {
-            if (!isAdmin(addrOf[codinomes[i]])) n++;
-        }
-
-        nomes = new string[](n);
-        enderecos = new address[](n);
-        saldos = new uint256[](n);
-
-        uint256 j = 0;
-        for (uint256 i = 0; i < codinomes.length; i++) {
-            address a = addrOf[codinomes[i]];
-            if (isAdmin(a)) continue;
-            nomes[j] = codinomes[i];
-            enderecos[j] = a;
-            saldos[j] = balanceOf(a);
-            j++;
-        }
     }
 
     function isAdmin(address account) public view returns (bool) {

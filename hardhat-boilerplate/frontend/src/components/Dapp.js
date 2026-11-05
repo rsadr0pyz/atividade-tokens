@@ -324,20 +324,37 @@ export class Dapp extends React.Component {
 
   async _updateBalance() {
     const address = this.state.selectedAddress;
-    const [balance, codinome, isAdmin, voting, [nomes, enderecos, saldos]] =
-      await Promise.all([
-        this._token.balanceOf(address),
-        this._token.codinomeOf(address),
-        this._token.isAdmin(address),
-        this._token.voting(),
-        this._token.getAlunos(),
-      ]);
-    const alunos = nomes.map((nome, i) => ({
-      codinome: nome,
-      endereco: enderecos[i],
-      saldo: saldos[i],
-    }));
+    const [balance, codinome, isAdmin, voting, alunos] = await Promise.all([
+      this._token.balanceOf(address),
+      this._token.codinomeOf(address),
+      this._token.isAdmin(address),
+      this._token.voting(),
+      this._getAlunos(),
+    ]);
     this.setState({ balance, codinome, isAdmin, voting, alunos });
+  }
+
+  // O contrato nao guarda lista de usuarios (mapping nao e iteravel), entao
+  // montamos a lista a partir dos eventos UserSet e confirmamos o estado atual
+  // de cada codinome no contrato.
+  async _getAlunos() {
+    const eventos = await this._token.queryFilter(this._token.filters.UserSet(), 0);
+    const nomes = [...new Set(eventos.map((e) => e.args.codinome))];
+
+    const alunos = await Promise.all(
+      nomes.map(async (nome) => {
+        const endereco = await this._token.addrOf(nome);
+        const [atual, admin, saldo] = await Promise.all([
+          this._token.codinomeOf(endereco),
+          this._token.isAdmin(endereco),
+          this._token.balanceOf(endereco),
+        ]);
+        // ignora admins e codinomes cujo endereco passou para outro codinome
+        if (admin || atual !== nome) return null;
+        return { codinome: nome, endereco, saldo };
+      })
+    );
+    return alunos.filter(Boolean);
   }
 
   // This method sends an ethereum transaction to transfer tokens.
